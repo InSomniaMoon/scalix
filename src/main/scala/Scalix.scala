@@ -42,7 +42,7 @@ object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
     }
     val movies = (data \ "cast").extract[List[MovieLight]];
     var results = Set[(Int, String)]();
-    movies.foreach(e => results += (e.id,e.title));
+    movies.map(e => results += (e.id,e.title));
     return results;
 
   }
