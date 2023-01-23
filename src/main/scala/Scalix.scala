@@ -8,7 +8,13 @@ trait Config(val api_key: String)
 
 object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
 
-  def getData(uri: String, query: String = "") = {
+  /**
+   * utils function
+   * @param uri the uri of the service to call
+   * @param query the optional query parameter to add
+   * @return the response of the service
+   */
+  def getData(uri: String, query: String = ""): JValue = {
     val url = s"https://api.themoviedb.org/3$uri?api_key=$api_key&language=fr-FR$query"
     val source = Source.fromURL(url)
     println(url)
