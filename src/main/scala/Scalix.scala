@@ -18,17 +18,32 @@ object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
 
   def findActorId(name: String, surname: String): Option[Int] = {
     val data = getData("/search/person", s"&query=$name+$surname")
-    if (data.getClass != JNothing.getClass) {
+    if (data.getClass == JNothing.getClass) {
       return None
     }
 
-    val results = (data \ "results")
-
+    val results = data \ "results"
+    if (results.children.isEmpty) {
+      return None
+    }
     Option(compact(render(results(0) \ "id")).toInt)
+  }
+
+  def findMovieDirector(movieId: Int): Option[(Int, String)] = {
+    val data = getData(s"/movie/$movieId/credits")
+
+    val results = (data \ "crew").find( _ \ "job" == JString("Director"))
+    results match
+      case Some(result) => Option((compact(render(result \ "id")).toInt, compact(render(result \ "name"))))
+      case None => None
   }
 
   val id = findActorId("Brad", "Pitt")
   println(id)
   val id2 = findActorId("Brad", "Pittt")
   println(id2)
+
+  val dir = findMovieDirector(550)
+  println(dir)
+
 }
