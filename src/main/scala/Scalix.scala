@@ -59,6 +59,19 @@ object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
       case None => None
   }
 
+  def collaboration(actor1: FullName, actor2: FullName): Set[(String, String)] = {
+    val id1 = findActorId(actor1.firstName,actor1.lastName);
+    val id2 = findActorId(actor2.firstName,actor2.lastName);
+    val data = getData("/discover/movie",s"&with_cast=${id1.head},${id2.head}");
+    println(data);
+
+    //val movies = (data \ "cast").extract[List[MovieLight]];
+    var results = Set[(String, String)]();
+    //movies.map(e => results += (e.id,e.title));
+    return results;
+
+  }
+
   val id = findActorId("Brad", "Pitt")
   println(id)
   val id2 = findActorId("Brad", "Pittt")
@@ -67,5 +80,9 @@ object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
   println(moviesBradPitt);
   val dir = findMovieDirector(550)
   println(dir)
+
+  val bradPitt = new FullName("Brad","Pitt");
+  val claireForlani = new FullName("Claire","Forlani");
+  val collaborationPittForlani = collaboration(bradPitt,claireForlani);
 
 }
