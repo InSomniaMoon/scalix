@@ -11,6 +11,24 @@ object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
   implicit val formats: Formats = DefaultFormats
   case class MovieLight(id: Int, title:String)
 
+  var actorPCache : Map[(String, String), Int] = Map()
+  var directorPCache : Map[Int,(Int, String)] = Map()
+
+  def secondaryCacheFactoryWriter(cache:"actor"|"director", content: String ) = {
+    val filename=s"data/$cache.json"
+    val out = new PrintWriter(filename)
+    out.print(content)
+  }
+
+  //  Finction = cherche dans P -> cherche dans secondary sinon call
+
+//  def cacheFactory<T>(type: "actor"| "director", object: T) = {
+//    type match {
+//      case "actor" => actorPCache += (id, name) -> 0
+//      case "director" => directorPCache += id -> (0, name)
+//    }
+//  }
+
   /**
    * utils function
    * @param uri the uri of the service to call
@@ -58,6 +76,10 @@ object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
   }
 
   def findMovieDirector(movieId: Int): Option[(Int, String)] = {
+    if(directorPCache.contains(movieId)){
+      return directorPCache.get(movieId);
+    }
+
     val data = getData(s"/movie/$movieId/credits")
     if (data.getClass == JNothing.getClass) {
       return None
