@@ -8,7 +8,7 @@ trait Config(val api_key: String)
 
 object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
   implicit val formats: Formats = DefaultFormats
-  case class MovieLight(id: Int, title:String);
+  case class MovieLight(id: Int, title:String)
 
   /**
    * utils function
@@ -38,70 +38,64 @@ object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
 
 
   def findActorMovies(actorId : Int): Set[(Int, String)] = {
-    val data = getData(s"/person/$actorId/movie_credits", "")
+    val data = getData(s"/person/$actorId/movie_credits")
     if (data.getClass == JNothing.getClass) {
-      return Set((0, "No movie for this actor"));
+      return Set((0, "No movie for this actor"))
     }
-    val movies = (data \ "cast").extract[List[MovieLight]];
-    var results = Set[(Int, String)]();
-    movies.map(e => results += (e.id,e.title));
-    return results;
-
+    val movies = (data \ "cast").extract[List[MovieLight]]
+    movies.map(e =>  (e.id,e.title)).toSet
   }
 
   def findMovieDirector(movieId: Int): Option[(Int, String)] = {
     val data = getData(s"/movie/$movieId/credits")
 
-    val results = (data \ "crew").find( _ \ "job" == JString("Director"))
-    results match
+    (data \ "crew").find( _ \ "job" == JString("Director")) match
       case Some(result) => Option((compact(render(result \ "id")).toInt, compact(render(result \ "name"))))
       case None => None
   }
 
   def collaboration(actor1: FullName, actor2: FullName): Set[(String, String)] = {
-    val id1 = findActorId(actor1.firstName,actor1.lastName);
-    val id2 = findActorId(actor2.firstName,actor2.lastName);
-    val data = getData("/discover/movie",s"&with_cast=${id1.head},${id2.head}");
+    val id1 = findActorId(actor1.firstName,actor1.lastName)
+    val id2 = findActorId(actor2.firstName,actor2.lastName)
+    if (id1.isEmpty || id2.isEmpty) {
+      return Set(("No actor found", "No actor found"))
+    }
+    val data = getData("/discover/movie",s"&with_cast=$id1,$id2")
     if (data.getClass == JNothing.getClass) {
-      return Set(("No movies for those two actors", "No movie for those actors"));
+      return Set(("No movies for those two actors", "No movie for those actors"))
     }
-    val totalResults = compact(render(data\"total_results")).toInt;
+    val totalResults = compact(render(data\"total_results")).toInt
+
     if(totalResults > 0) {
-      val movies = (data \ "results").extract[List[MovieLight]];
-      var results = Set[(String, String)]();
-      movies.map((movie) => {
-        var director = findMovieDirector(movie.id);
-        results += (director.head(1),movie.title)
-      });
-      results;
-    }else{
-      Set(("No movies for those two actors", "No movie for those actors"));
+      return (data \ "results").extract[List[MovieLight]].map(movie =>
+       (findMovieDirector(movie.id).head(1),movie.title)
+      ).toSet
     }
 
-
+    Set(("No movies for those two actors", "No movie for those actors"))
   }
 
   val id = findActorId("Brad", "Pitt")
   println(id)
   val id2 = findActorId("Brad", "Pittt")
   println(id2)
-  val moviesBradPitt = findActorMovies(287);
-  println(moviesBradPitt);
+  val moviesBradPitt = findActorMovies(287)
+  println(moviesBradPitt)
   val dir = findMovieDirector(550)
   println(dir)
 
-  val bradPitt = new FullName("Brad","Pitt");
-  val claireForlani = new FullName("Claire","Forlani");
-  val collaborationPittForlani = collaboration(bradPitt,claireForlani);
-  println(collaborationPittForlani);
+  val bradPitt = new FullName("Brad","Pitt")
+  val claireForlani = new FullName("Claire","Forlani")
+  val collaborationPittForlani = collaboration(bradPitt,claireForlani)
+  println(collaborationPittForlani)
 
-  val mattDamon = new FullName("Matt", "Damon");
-  val collaborationPittDamon = collaboration(bradPitt,mattDamon);
-  println(collaborationPittDamon);
+  val mattDamon = new FullName("Matt", "Damon")
+  val collaborationPittDamon = collaboration(bradPitt,mattDamon)
+  println(collaborationPittDamon)
 
-  val pierreNiney = new FullName("Pierre", "Niney");
-  val collaborationPittNiney = collaboration(bradPitt,pierreNiney);
-  println(collaborationPittNiney);
+  val pierreNiney = new FullName("Pierre", "Niney")
+  val collaborationPittNiney = collaboration(bradPitt,pierreNiney)
+  println(collaborationPittNiney)
 
 
 }
