@@ -3,6 +3,7 @@ package fr.leroyer.athimon
 import scala.io.Source
 import org.json4s._
 import org.json4s.native.JsonMethods._
+  import java.io.PrintWriter
 
 trait Config(val api_key: String)
 
@@ -24,6 +25,13 @@ object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
   }
 
   def findActorId(name: String, surname: String): Option[Int] = {
+    if (actorPCache.contains((name, surname))) {
+      secondaryCacheFactoryWriter("actor", actorPCache((name, surname)).toString)
+      return actorPCache.get((name, surname))
+    }
+
+
+
     val data = getData("/search/person", s"&query=$name+$surname")
     if (data.getClass == JNothing.getClass) {
       return None
@@ -33,7 +41,10 @@ object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
     if (results.children.isEmpty) {
       return None
     }
-    Option(compact(render(results(0) \ "id")).toInt)
+
+    val actorId = compact(render(results(0) \ "id")).toInt
+    actorPCache += ((name, surname) -> actorId)
+    Some(actorId)
   }
 
 
@@ -48,9 +59,16 @@ object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
 
   def findMovieDirector(movieId: Int): Option[(Int, String)] = {
     val data = getData(s"/movie/$movieId/credits")
-
-    (data \ "crew").find( _ \ "job" == JString("Director")) match
-      case Some(result) => Option((compact(render(result \ "id")).toInt, compact(render(result \ "name"))))
+    if (data.getClass == JNothing.getClass) {
+      return None
+    }
+    (data \ "crew").find(_ \ "job" == JString("Director")) match
+      case Some(result) => {
+        val directorId = compact(render(result \ "id")).toInt
+        val directorName = compact(render(result \ "name"))
+        directorPCache += (movieId  ->(directorId, directorName))
+        Some((directorId, directorName))
+      }
       case None => None
   }
 
