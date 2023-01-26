@@ -1,9 +1,10 @@
 package fr.leroyer.athimon
 
 import scala.io.Source
-import org.json4s._
-import org.json4s.native.JsonMethods._
-  import java.io.PrintWriter
+import org.json4s.*
+import org.json4s.native.JsonMethods.*
+
+import java.io.{File, PrintWriter}
 
 trait Config(val api_key: String)
 
@@ -12,13 +13,30 @@ object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
   case class MovieLight(id: Int, title:String)
 
   var actorPCache : Map[(String, String), Int] = Map()
+  var actorCreditsPCache : Map[Int,Set[(Int, String)]] = Map()
   var directorPCache : Map[Int,(Int, String)] = Map()
+  val path = File(".").getCanonicalPath+"/src/main/"
 
-  def secondaryCacheFactoryWriter(cache:"actor"|"director", content: String ) = {
-    val filename=s"data/$cache.json"
+  // Usage de id en tant que string pour cotenter l'ajoute par non ou id
+  def secondaryCacheFactoryWriter(cache:"actor"|"actorcredits"|"director", content: String, id: String ) = {
+    val filename=s"${path}data/$cache$id.json"
+    if(!File(filename).exists()){
+      val file = new File(filename)
+      println(file.toPath);
+      file.createNewFile()
+    }
     val out = new PrintWriter(filename)
     out.print(content)
+    out.close()
   }
+
+  def secondaryCacheFactoryReader(cache:"actor"|"actorcredits"|"director", id: String ) : JValue = {
+    val filename=s"data/$cache.json"
+    val out = Source.fromFile(filename).mkString
+    parse(out)
+  }
+
+
 
   //  Finction = cherche dans P -> cherche dans secondary sinon call
 
@@ -44,12 +62,8 @@ object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
 
   def findActorId(name: String, surname: String): Option[Int] = {
     if (actorPCache.contains((name, surname))) {
-      secondaryCacheFactoryWriter("actor", actorPCache((name, surname)).toString)
       return actorPCache.get((name, surname))
     }
-
-
-
     val data = getData("/search/person", s"&query=$name+$surname")
     if (data.getClass == JNothing.getClass) {
       return None
@@ -62,6 +76,9 @@ object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
 
     val actorId = compact(render(results(0) \ "id")).toInt
     actorPCache += ((name, surname) -> actorId)
+    secondaryCacheFactoryWriter("actor", s"{\"id\":$actorId}" ,s"$name$surname")
+
+
     Some(actorId)
   }
 
