@@ -3,108 +3,22 @@ package fr.leroyer.athimon
 import scala.io.Source
 import org.json4s.*
 import org.json4s.native.JsonMethods.*
+import fr.leroyer.athimon._
 
 import java.io.{File, PrintWriter}
 
 trait Config(val api_key: String)
 
 object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
+
   implicit val formats: Formats = DefaultFormats
 
   case class MovieLight(id: Int, title: String)
 
-  var actorPCache: Map[(String, String), Int] = Map()
-  var actorCreditsPCache: Map[Int, Set[(Int, String)]] = Map()
-  var directorPCache: Map[Int, (Int, String)] = Map()
-  val path = File(".").getCanonicalPath + "/src/main"
 
   // file cache writer : Usage de id en tant que string pour cotenter l'ajoute par non ou id
   // TODO : refacto le writer pour écrire dans les deux caches à la fois !
 
-  def secondaryCacheFactoryWriter(cache: "actor" | "actor-credits" | "director", content: String, id: String): Unit = {
-    val filename = s"$path/data/$cache\u0024$id.json"
-
-    if (!File(filename).exists()) {
-      val file = new File(filename)
-
-      file.createNewFile()
-    }
-    val out = new PrintWriter(filename)
-    out.print(content)
-    out.close()
-  }
-
-
-  // file cache reader
-  def secondaryCacheFactoryReader(cache: "actor" | "actor-credits" | "director", id: String): String = {
-    val filename = s"$path/data/$cache\u0024$id.json"
-    try {
-      val file = Source.fromFile(filename)
-      val content = file.mkString
-      file.close()
-      return content
-    } catch
-      case _: Exception => return null
-
-    val out = Source.fromFile(filename)
-    val content = out.mkString
-    out.close()
-    content
-  }
-
-  def cacheReaderFactory(cache: "actor" | "actor-credits" | "director", id: String): JValue = {
-    // look in memory cache
-    cache match {
-      case "actor" =>
-        val name = id.split(" ").head
-        val surname = id.split(" ").tail.head
-        actorPCache.get(name, surname) match {
-          case Some(value) =>
-            return parse("""{"id":%d}""".format(value))
-          case _ =>
-        }
-      case "director" =>
-        directorPCache.get(id.toInt) match {
-          case Some(_) =>
-            val (mid, name) = directorPCache(id.toInt)
-            return parse("""{"id":%d,"name":%s}""".format(mid, name))
-          case _ =>
-        }
-
-      case "actor-credits" => actorCreditsPCache.get(id.toInt) match {
-        case Some(_) =>
-          val sCredits = "[" + actorCreditsPCache(id.toInt).map(x => """{"id":%d,"title":%s},""".format(x._1, x._2)).reduce(_ + _) + "]"
-          return parse(sCredits)
-        case _ =>
-      }
-    }
-    println(s"$id NOT IN MEMORY CACHE")
-
-    // Look in file cache
-    val fileCache = secondaryCacheFactoryReader(cache, id.split(" ").reduce(_ + _))
-    if (fileCache != null) {
-      val parsedCache = parse(fileCache)
-      cache match {
-        case "actor" =>
-          val actorId = (parsedCache \ "id").extract[Int]
-          val name = id.split(" ").head
-          val surname = id.split(" ").tail.head
-          actorPCache += ((name, surname) -> actorId)
-
-        case "actor-credits" =>
-
-          actorCreditsPCache += (id.toInt -> parsedCache.asInstanceOf[JArray].arr.map(x => (compact(render(x \ "id")).toInt, compact(render(x \ "title")))).toSet)
-
-        case "director" =>
-          val id = (parsedCache \ "id").extract[Int]
-          val name = (parsedCache \ "name").extract[String]
-          directorPCache += (id -> (id, name))
-      }
-      return parsedCache
-    }
-    println(s"$id NOT IN FILE CACHE")
-    JNothing
-  }
 
   /**
    * utils function
@@ -129,7 +43,7 @@ object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
    */
   def findActorId(name: String, surname: String): Option[Int] = {
     // check if actor is in cache
-    val cache = cacheReaderFactory("actor", s"$name $surname")
+    val cache = Cache.cacheReaderFactory("actor", s"$name $surname")
     if (cache.getClass != JNothing.getClass) {
       val id = compact(render(cache \ "id")).toInt
       return Some(id)
@@ -146,8 +60,8 @@ object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
     }
 
     val actorId = compact(render(results(0) \ "id")).toInt
-    actorPCache += ((name, surname) -> actorId)
-    secondaryCacheFactoryWriter("actor", s"{\"id\":$actorId}", s"$name$surname")
+    Cache.actorPCache += ((name, surname) -> actorId)
+    Cache.secondaryCacheFactoryWriter("actor", s"{\"id\":$actorId}", s"$name$surname")
 
     Some(actorId)
   }
@@ -161,7 +75,7 @@ object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
    */
   def findActorMovies(actorId: Int): Set[(Int, String)] = {
     // check if actor is in cache
-    val cache = cacheReaderFactory("actor-credits", actorId.toString)
+    val cache = Cache.cacheReaderFactory("actor-credits", actorId.toString)
     if (cache.getClass != JNothing.getClass) {
       return cache.children.map(c => (compact(render(c \ "id")).toInt, compact(render(c \ "title")))).toSet
     }
@@ -170,7 +84,7 @@ object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
       return Set((0, "No movie for this actor"))
     }
     val movies = (data \ "cast").extract[List[MovieLight]]
-    secondaryCacheFactoryWriter("actor-credits", "[" + movies.map(movie => s"{\"id\":${movie.id}, \"title\": \"${movie.title}\"},").reduce((a, b) => a + b) + "]", actorId.toString)
+    Cache.secondaryCacheFactoryWriter("actor-credits", "[" + movies.map(movie => s"{\"id\":${movie.id}, \"title\": \"${movie.title}\"},").reduce((a, b) => a + b) + "]", actorId.toString)
     movies.map(e => (e.id, e.title)).toSet
   }
 
@@ -183,7 +97,7 @@ object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
    */
   def findMovieDirector(movieId: Int): Option[(Int, String)] = {
     // check if movieId is in cache
-    val cache = cacheReaderFactory("director", movieId.toString)
+    val cache = Cache.cacheReaderFactory("director", movieId.toString)
     if (cache.getClass != JNothing.getClass) {
       val id = compact(render(cache \ "id")).toInt
       val name = compact(render(cache \ "name"))
@@ -198,7 +112,7 @@ object Scalix extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
       case Some(result) =>
         val directorId = compact(render(result \ "id")).toInt
         val directorName = compact(render(result \ "name"))
-        secondaryCacheFactoryWriter("director", s"{\"id\":$directorId,\"name\":$directorName}", movieId.toString)
+        Cache.secondaryCacheFactoryWriter("director", s"{\"id\":$directorId,\"name\":$directorName}", movieId.toString)
         Some((directorId, directorName))
       case None => None
   }
