@@ -20,7 +20,7 @@ object Cache {
   
   // file cache reader
   def secondaryCacheFactoryReader(cache: "actor" | "actor-credits" | "director", id: String): String = {
-    val filename = s"$path/data/$cache\u0024$id.json"
+    val filename = s"$path/data/$cache$id.json"
     try {
       val file = Source.fromFile(filename)
       val content = file.mkString
@@ -36,7 +36,7 @@ object Cache {
   }
 
   def secondaryCacheFactoryWriter(cache: "actor" | "actor-credits" | "director", content: String, id: String): Unit = {
-    val filename = s"$path/data/$cache\u0024$id.json"
+    val filename = s"$path/data/$cache$id.json"
 
     if (!File(filename).exists()) {
       val file = new File(filename)

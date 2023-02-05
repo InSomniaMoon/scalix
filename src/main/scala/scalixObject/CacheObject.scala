@@ -13,20 +13,9 @@ object CacheObject {
 
   var directorPCache: Map[Int, (Int, String)] = Map()
   val path = File(".").getCanonicalPath + "/src/main"
-
-  //case class MovieLight(id: Int, title: String)
-/*
-  def memoize[S, T](f : S => T): S => T =
-    var cache = Map[S, T]()
-    (s: S) =>
-      cache.get(s) match
-        case None => val t = f(s); cache += (s, t); t
-        case Some(t) => println("got it"); t
-
-  def fact(n: Int): Int = (1 to n).product*/
   // Using memoization
 
-  def cacheMemoization[S, T](f : S => T): S => T =
+  def cacheMemoization[S, T](f: S => T): S => T =
     var cache = Map[S, T]()
     (s: S) =>
       cache.get(s) match
@@ -35,7 +24,7 @@ object CacheObject {
 
 
   // file cache reader
-  def secondaryCacheFactoryReader(cache: "actor" | "actor-credits" | "director", id: String): String = {
+  def secondaryCacheFactoryReader(cache: "actor" | "actor-credits" | "director" | "collaborations", id: String): String = {
     val filename = s"$path/data/$cache$id.json"
     try {
       val file = Source.fromFile(filename)
@@ -51,12 +40,10 @@ object CacheObject {
     content
   }
 
-  def secondaryCacheFactoryWriter(cache: "actor" | "actor-credits" | "director", content: String, id: String): Unit = {
+  def secondaryCacheFactoryWriter(cache: "actor" | "actor-credits" | "director" | "collaborations", content: String, id: String): Unit = {
     val filename = s"$path/data/$cache$id.json"
-
     if (!File(filename).exists()) {
       val file = new File(filename)
-
       file.createNewFile()
     }
     val out = new PrintWriter(filename)
@@ -64,12 +51,10 @@ object CacheObject {
     out.close()
   }
 
-  /*def cacheReaderGeneral(): Unit ={
-
-  }*/
 
 
-  def cacheReaderFactory(cache: "actor" | "actor-credits" | "director", id: String): JValue = {
+
+  def cacheReaderFactory(cache: "actor" | "actor-credits" | "director" | "collaborations", id: String): JValue = {
     // Look in file cache
     val fileCache = secondaryCacheFactoryReader(cache, id.split(" ").reduce(_ + _))
     if (fileCache != null) {

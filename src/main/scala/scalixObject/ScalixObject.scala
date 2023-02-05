@@ -7,20 +7,15 @@ import org.json4s.native.JsonMethods.*
 import fr.leroyer.athimon.scalixObject.*
 import fr.leroyer.athimon.scalixObject.CacheObject.cacheMemoization
 
+import java.awt.SecondaryLoop
 import java.io.{File, PrintWriter}
+import javax.lang.model.element.ModuleElement.Directive
 
 trait Config(val api_key: String)
 
 object ScalixObject extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
 
   implicit val formats: Formats = DefaultFormats
-
-  case class MovieLight(id: Int, title: String)
-
-
-  // file cache writer : Usage de id en tant que string pour cotenter l'ajoute par non ou id
-  // TODO : refacto le writer pour écrire dans les deux caches à la fois !
-
 
   /**
    * utils function
@@ -41,27 +36,28 @@ object ScalixObject extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
    * @param name    the name of the actor
    * @param surname the first name of the actor
    * @return the id of the actor
-   *         Terminated
    */
-  def findActorId(actor: Actor): Option[Int] = {
+  def findActorId(actor: Actor): Actor = {
     // check if actor is in cache
     val cache = CacheObject.cacheReaderFactory("actor", s"${actor.name} ${actor.surname}")
     if (cache.getClass != JNothing.getClass) {
       val id = compact(render(cache \ "id")).toInt
-      return Some(id)
+      actor.id = id
+      return actor
     }
 
     val data = getData("/search/person", s"&query=${actor.name}+${actor.surname}")
     if (data.getClass == JNothing.getClass) {
-      return None
+      return actor
     }
     val results = data \ "results"
     if (results.children.isEmpty) {
-      return None
+      return actor
     }
     val actorId = compact(render(results(0) \ "id")).toInt
-    CacheObject.secondaryCacheFactoryWriter("actor", s"{\"id\":$actorId}", s"${actor.name} ${actor.surname}")
-    Some(actorId)
+    CacheObject.secondaryCacheFactoryWriter("actor", s"{\"id\":$actorId}", s"${actor.name}${actor.surname}")
+    actor.id = actorId
+    actor
   }
 
 
@@ -79,9 +75,9 @@ object ScalixObject extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
     }
     val data = getData(s"/person/$actorId/movie_credits")
     if (data.getClass == JNothing.getClass) {
-      return Set(Movie(0,"No movies"))
+      return Set(Movie(0, "No movies"))
     }
-    val movies = (data \ "cast").extract[List[MovieLight]]
+    val movies = (data \ "cast").extract[List[Movie]]
     CacheObject.secondaryCacheFactoryWriter("actor-credits", "[" + movies.map(movie => s"{\"id\":${movie.id}, \"title\": \"${movie.title}\"},").reduce((a, b) => a + b) + "]", actorId.toString)
     movies.map(e => Movie(e.id, e.title)).toSet
   }
@@ -91,7 +87,6 @@ object ScalixObject extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
    *
    * @param movieId the id of the movie
    * @return a pair of id + name of the director
-   *         terminated
    */
   def findMovieDirector(movieId: Int): Option[Movie] = {
     // check if movieId is in cache
@@ -111,7 +106,7 @@ object ScalixObject extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
         val directorId = compact(render(result \ "id")).toInt
         val directorName = compact(render(result \ "name"))
         CacheObject.secondaryCacheFactoryWriter("director", s"{\"id\":$directorId,\"name\":$directorName}", movieId.toString)
-        Some(Movie(directorId, directorName))
+        Some(Director(directorId, directorName))
       case None => None
   }
 
@@ -121,42 +116,75 @@ object ScalixObject extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
    * @param actor1 the id of the first actor
    * @param actor2 the id of the second actor
    * @return a set of the director + title of the movies
-   *         terminated
    */
-  /*def collaboration(actor1: FullName, actor2: FullName): Set[(String, String)] = {
-    val id1 = findActorId(actor1.firstName, actor1.lastName)
-    val id2 = findActorId(actor2.firstName, actor2.lastName)
-    if (id1.isEmpty || id2.isEmpty) {
-      return Set(("No actor found", "No actor found"))
+  def collaboration(actor1: Actor, actor2: Actor): Set[(Director, Movie)] = {
+    val id1 = findActorId(actor1)
+    val id2 = findActorId(actor2)
+
+    if (id1.id == -1 || id2.id == -1) {
+      return Set((null, null))
+    }
+    val cache = CacheObject.cacheReaderFactory("collaborations", s"${id1.id},${id2.id}")
+    if (cache.getClass != JNothing.getClass) {
+      return cache.extract[List[Collaboration]].map(collab => (collab.director, collab.movie)).toSet
     }
     val data = getData("/discover/movie", s"&with_cast=$id1,$id2")
     if (data.getClass == JNothing.getClass) {
-      return Set(("No movies for those two actors", "No movie for those actors"))
+      return Set((null, null))
     }
-    val totalResults = compact(render(data \ "total_results")).toInt
 
-    if (totalResults > 0) {
-      return (data \ "results").extract[List[MovieLight]].map(movie =>
-        (findMovieDirector(movie.id).head(1), movie.title)
+    if (compact(render(data \ "total_results")).toInt > 0) {
+      val res = (data \ "results").extract[List[Movie]].map(movie =>
+        (findMovieDirector(movie.id).get, movie)
       ).toSet
+      CacheObject.secondaryCacheFactoryWriter("collaborations", "[" + res.map(collab => """{"director": {"id": %s, "name": %s}, "movie": {"id": %s, "title": "%s"}},""".format(collab._1.id, collab._1.name, collab._2.id, collab._2.title)).reduce((a, b) => a + b) + "]", s"${id1.id},${id2.id}")
+
+      return res
     }
-    Set(("No movies for those two actors", "No movie for those actors"))
+    Set((null, null))
+
   }
 
-*/
-  val cacheMemoActorId = cacheMemoization[Actor,Option[Int]](findActorId)
-  val BradPitt = new Actor("Brad","Pitt")
-  var id = cacheMemoActorId(BradPitt)
-  println(id)
-  id = cacheMemoActorId(BradPitt)
-  println(id)
+
+  val cacheMemoActorId = cacheMemoization[Actor, Actor](findActorId)
+  val BradPitt = new Actor("Brad", "Pitt")
+
+  var bradPittId = cacheMemoActorId(BradPitt)
+  println(bradPittId)
+  bradPittId = cacheMemoActorId(BradPitt)
+  println(bradPittId)
 
   val cacheMemoMovieActor = cacheMemoization[Int, Set[Movie]](findActorMovies)
-  val moviesBradPitt = cacheMemoMovieActor(id.get)
+  val moviesBradPitt = cacheMemoMovieActor(bradPittId.id)
   println(moviesBradPitt)
 
   val cacheMemoDirectors = cacheMemoization[Int, Option[Movie]](findMovieDirector)
   val moviesof550 = cacheMemoDirectors(550)
   println(moviesof550)
 
+  val claireForlani = new Actor("Claire", "Forlani")
+  val claireForlaniId = cacheMemoActorId(claireForlani)
+
+  val cacheMemoCollaboration = cacheMemoization[(Actor, Actor), Set[(Director, Movie)]](collaboration)
+  val collabClaireBrad = cacheMemoCollaboration((claireForlani, BradPitt))
+
+  //4.1 On créé une liste de paires d'acteurs et ensuite on cherche leurs collaborations.
+  // Pour finir on fait en sorte de compter et de sortir ceux qui ont le plus collaborations communes
+  val acteurs = List(
+    Actor("Orlando", "Bloom"),
+    Actor("Monica", "Bellucci"),
+    Actor("Johnny", "Depp"),
+    Actor("Keira", "Knightley"),
+    Actor("Tom", "Cruise"),
+    Actor("Penelope", "Cruz"),
+    BradPitt,
+    claireForlani).map(actor => cacheMemoActorId(actor))
+  val paires = (for (a <- acteurs) yield for (b <- acteurs) yield (a, b)).reduce((a, b) => a ++ b).filter(p => p._1 != p._2)
+  println(paires)
+  // faire un hashmap (actor, actor -> int) avec la paire et son nombre de collab, et filtrer le max
+  val collabs = paires.map(pair => (pair, cacheMemoCollaboration(pair)))
+    .filter(collab => collab._2.nonEmpty)
+    .map(collab => (collab._1, collab._2.size))
+    .maxBy(_._2)
+  println(collabs)
 }
