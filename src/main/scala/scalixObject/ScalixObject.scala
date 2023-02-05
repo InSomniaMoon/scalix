@@ -88,13 +88,13 @@ object ScalixObject extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
    * @param movieId the id of the movie
    * @return a pair of id + name of the director
    */
-  def findMovieDirector(movieId: Int): Option[Movie] = {
+  def findMovieDirector(movieId: Int): Option[Director] = {
     // check if movieId is in cache
     val cache = CacheObject.cacheReaderFactory("director", movieId.toString)
     if (cache.getClass != JNothing.getClass) {
       val id = compact(render(cache \ "id")).toInt
       val name = compact(render(cache \ "name"))
-      return Some(Movie(id, name))
+      return Some(Director(id, name))
     }
 
     val data = getData(s"/movie/$movieId/credits")
@@ -158,7 +158,7 @@ object ScalixObject extends App, Config("65c251744206a64af3ad031e4d5a4a48") {
   val moviesBradPitt = cacheMemoMovieActor(bradPittId.id)
   println(moviesBradPitt)
 
-  val cacheMemoDirectors = cacheMemoization[Int, Option[Movie]](findMovieDirector)
+  val cacheMemoDirectors = cacheMemoization[Int, Option[Director]](findMovieDirector)
   val moviesof550 = cacheMemoDirectors(550)
   println(moviesof550)
 

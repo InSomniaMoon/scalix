@@ -11,7 +11,6 @@ object CacheObject {
 
   implicit val formats: Formats = DefaultFormats
 
-  var directorPCache: Map[Int, (Int, String)] = Map()
   val path = File(".").getCanonicalPath + "/src/main"
   // Using memoization
 
@@ -58,21 +57,7 @@ object CacheObject {
     // Look in file cache
     val fileCache = secondaryCacheFactoryReader(cache, id.split(" ").reduce(_ + _))
     if (fileCache != null) {
-      val parsedCache = parse(fileCache)
-      cache match {
-        case "actor" =>
-          val actorId = (parsedCache \ "id").extract[Int]
-          val name = id.split(" ").head
-          val surname = id.split(" ").tail.head
-
-        case "actor-credits" =>
-
-        case "director" =>
-          val id = (parsedCache \ "id").extract[Int]
-          val name = (parsedCache \ "name").extract[String]
-          directorPCache += (id -> (id, name))
-      }
-      return parsedCache
+     return parse(fileCache)
     }
     println(s"$id NOT IN FILE CACHE")
     JNothing
